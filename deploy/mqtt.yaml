@@ -1,0 +1,89 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: mqtt-secret
+type: Opaque
+data:
+  password: Zm9vCg==
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mqtt-nfs
+  annotations:
+    volume.beta.kubernetes.io/storage-class: ibmc-file-silver
+  labels:
+    app: mqtt
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mqtt
+  labels:
+    app: mqtt
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mqtt
+  template:
+    metadata:
+      labels:
+        app: mqtt
+    spec:
+      volumes:
+        - name: mqtt-volume
+          persistentVolumeClaim:
+            claimName: mqtt-nfs
+      containers:
+        - name: mqtt
+          image: "registry.ng.bluemix.net/rbac-tutorial/mqtt-img:1"
+          imagePullPolicy: Always
+          env:
+            - name: MQTT_PUMP_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: mqtt-secret
+                  key: password
+          volumeMounts:
+            - name: mqtt-volume
+              mountPath: "/shared"
+          ports:
+            - containerPort: 80
+            - containerPort: 1883
+          readinessProbe:
+            tcpSocket:
+              port: 1883
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 1883
+            initialDelaySeconds: 15
+            periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mqtt
+  labels:
+    app: mqtt
+spec:
+  type: LoadBalancer
+  ports:
+  - port: 1883
+    targetPort: 1883
+    name: mqtt
+    protocol: TCP
+  - port: 80
+    targetPort: 80
+    name: http
+    protocol: TCP
+  selector:
+    app: mqtt

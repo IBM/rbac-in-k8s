@@ -1,0 +1,24 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tools-no-rbac
+  labels:
+    app: tools
+    rbac: none
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tools
+      rbac: none
+  template:
+    metadata:
+      labels:
+        app: tools
+        rbac: none
+    spec:
+      containers:
+        - name: tools-v1
+          image: "registry.ng.bluemix.net/rbac-tutorial/tools-img:1"
+          imagePullPolicy: Always
+          command: ["/bin/sleep", "3601"]

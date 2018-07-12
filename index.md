@@ -510,10 +510,8 @@ tools-no-rbac-7dc96f489b-ph7h9          1/1       Running   22         22h
 tools-service-account-6664bdf7f-rv5n2   1/1       Running   0          1m
 ```
 
-### 5. Rerun the application
+### Adding Role and RoleBinding for Service Account
 
-### 6. Create a ServiceAccount
+### Testing Access
 
-### 7. Restrict the application to the ServiceAccount
-
-### 8. Apply the RoleBinding to the service account
+### ClusterRoles and ClusterRoleBinding

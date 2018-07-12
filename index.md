@@ -36,9 +36,128 @@ The total time to complete this how-to is around 90 minutes.
 
 ### 1. Create a Kubernetes Cluster
 
-### 2. Run an application with Kubectl
+TBD
 
-### 3. Create a Role for the access needed
+### 2. Start our sample application, and our tools pod
+
+TBD
+
+### 3. Attempt to access the Kubernetes API
+
+One of the powerful parts of Kubernetes is the ability to interact
+with the Kubernetes API inside the cluster. This allows applications
+to actively manage their own resources and adapt to circumstances.
+
+We'll demonstrate that by connecting to our tools app and using
+`kubectl`.
+
+Run the following command to get the name of the tools pod we launched
+in the environment.
+
+```
+> kubectl get pods -l rbac=none
+NAME                             READY     STATUS    RESTARTS   AGE
+tools-no-rbac-7dc96f489b-ph7h9   1/1       Running   0          1h
+```
+
+Now we can create a bash session on that pod using the following
+command:
+
+```
+> kubectl exec -it tools-no-rbac-7dc96f489b-ph7h9 bash
+
+root@tools-no-rbac-7dc96f489b-ph7h9:/#
+```
+
+We're in! Next step is to run `kubectl get all` to see what we can see
+from there.
+
+```
+# kubectl get all
+
+Error from server (Forbidden): pods is forbidden: User "system:serviceaccount:default:default" cannot list pods in the namespace "default"
+Error from server (Forbidden): replicationcontrollers is forbidden: User "system:serviceaccount:default:default" cannot list replicationcontrollers in the namespace "default"
+Error from server (Forbidden): services is forbidden: User "system:serviceaccount:default:default" cannot list services in the namespace "default"
+Error from server (Forbidden): daemonsets.extensions is forbidden: User "system:serviceaccount:default:default" cannot list daemonsets.extensions in the namespace "default"
+Error from server (Forbidden): deployments.extensions is forbidden: User "system:serviceaccount:default:default" cannot list deployments.extensions in the namespace "default"
+Error from server (Forbidden): replicasets.extensions is forbidden: User "system:serviceaccount:default:default" cannot list replicasets.extensions in the namespace "default"
+Error from server (Forbidden): daemonsets.apps is forbidden: User "system:serviceaccount:default:default" cannot list daemonsets.apps in the namespace "default"
+Error from server (Forbidden): deployments.apps is forbidden: User "system:serviceaccount:default:default" cannot list deployments.apps in the namespace "default"
+Error from server (Forbidden): replicasets.apps is forbidden: User "system:serviceaccount:default:default" cannot list replicasets.apps in the namespace "default"
+Error from server (Forbidden): statefulsets.apps is forbidden: User "system:serviceaccount:default:default" cannot list statefulsets.apps in the namespace "default"
+Error from server (Forbidden): horizontalpodautoscalers.autoscaling is forbidden: User "system:serviceaccount:default:default" cannot list horizontalpodautoscalers.autoscaling in the namespace "default"
+Error from server (Forbidden): jobs.batch is forbidden: User "system:serviceaccount:default:default" cannot list jobs.batch in the namespace "default"
+Error from server (Forbidden): cronjobs.batch is forbidden: User "system:serviceaccount:default:default" cannot list cronjobs.batch in the namespace "default"
+
+```
+
+Ok, that didn't work, what happened?
+
+Starting in Kubernetes 1.9 the API was put behind a mandatory Role
+Based Access Control system. By default no access is granted to
+applications any more. You now must explicitly allow access to the
+parts of the API that your applications need. This broke a lot of
+applications that weren't prepared for the transition.
+
+Kubernetes has two resources that control the access to the API:
+
+* **Role**: specifies what access is granted
+* **RoleBinding**: specifies who the Role applies to
+
+We'll create both in a few ways to see how this all works.
+
+### 3. Create a Role and RoleBinding
+
+Our first step is to create a `Role`. The example Role we'll create
+can do 2 things, list or get all services, and create or delete
+secrets.
+
+``` yaml
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: global-role
+  namespace: default
+  labels:
+    app: tools-rbac
+rules:
+- apiGroups: [""]
+  resources: ["services"]
+  verbs: ["get", "list"]
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["create", "delete"]
+```
+
+Roles are specified as a set of rules, based on the apiGroup (empty
+for core resources), resource name, verbs to act on the that resource,
+and optionally a resourceName to restrict it further (often used with
+secrets and configmaps).
+
+This will let us list the services, get information on a particular
+service, and create or delete a single secret.
+
+A Role in isolation doesn't do anything until we bind it with a
+RoleBinding.
+
+``` yaml
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: global-rolebinding
+  namespace: default
+  labels:
+    app: tools-rbac
+subjects:
+- kind: Group
+  name: system:serviceaccounts
+  apiGroup: rbac.authorization.k8s.io
+  namespace: default
+roleRef:
+  kind: Role
+  name: global-role
+  apiGroup: ""
+```
 
 ### 4. Create a RoleBinding
 

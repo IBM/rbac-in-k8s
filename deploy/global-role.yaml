@@ -15,6 +15,7 @@ rules:
   verbs: ["get", "list"]
 - apiGroups: [""]
   resources: ["secrets"]
+  resourceNames: ["mqtt-pub-address"]
   verbs: ["create", "delete"]
 ---
 # Standard role binding, connect these together.

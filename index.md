@@ -36,9 +36,50 @@ The total time to complete this how-to is around 90 minutes.
 
 ### 1. Create a Kubernetes Cluster
 
-TBD
+Lets Bui
 
 ### 2. Start our sample application, and our tools pod
+
+Let's build some images for our application and get them up and
+running. First off we need to create a local container registry to
+store them in:
+
+```
+> ibmcloud cr namespace-add rbac-tutorial
+
+Adding namespace 'rbac-tutorial'...
+
+Successfully added namespace 'rbac-tutorial'
+
+OK
+```
+
+Then we'll build a couple of images:
+
+```
+> bx cr build --tag registry.ng.bluemix.net/rbac-tutorial/mqtt-img:1 deploy/mqtt-img
+
+Sending build context to Docker daemon  6.656kB
+Step 1/13 : FROM ubuntu:xenial
+...
+1: digest: sha256:ea1afeb4e5754f8defcae039f9a43aff8b81ecc24ef9ed2d907381a9a99d0b2b size: 2821
+
+OK
+
+```
+
+```
+> bx cr build --tag registry.ng.bluemix.net/rbac-tutorial/tools-img:1 deploy/tools-img
+
+Sending build context to Docker daemon  4.096kB
+Step 1/9 : FROM ubuntu:xenial
+...
+1: digest: sha256:78b0639d6c77af5b6fda4d690273a702c43c55cb386f5ab24e78a693a6664f2a size: 2200
+
+OK
+
+```
+
 
 TBD
 
@@ -73,7 +114,7 @@ We're in! Next step is to run `kubectl get all` to see what we can see
 from there.
 
 ```
-# kubectl get all
+root@tools-no-rbac-7dc96f489b-ph7h9:/# kubectl get all
 
 Error from server (Forbidden): pods is forbidden: User "system:serviceaccount:default:default" cannot list pods in the namespace "default"
 Error from server (Forbidden): replicationcontrollers is forbidden: User "system:serviceaccount:default:default" cannot list replicationcontrollers in the namespace "default"
@@ -183,7 +224,7 @@ Let's connect to our tools pod and see what happens now:
 ```
 > kubectl exec -it tools-no-rbac-7dc96f489b-ph7h9 bash
 
-# kubectl get all
+root@tools-no-rbac-7dc96f489b-ph7h9:/# kubectl get all
 NAME         TYPE           CLUSTER-IP     EXTERNAL-IP     PORT(S)                       AGE
 kubernetes   ClusterIP      172.21.0.1     <none>          443/TCP                       15d
 mqtt         LoadBalancer   172.21.91.88   169.60.93.179   1883:32145/TCP,80:31639/TCP   22h
@@ -200,7 +241,7 @@ Error from server (Forbidden): horizontalpodautoscalers.autoscaling is forbidden
 Error from server (Forbidden): jobs.batch is forbidden: User "system:serviceaccount:default:default" cannot list jobs.batch in the namespace "default"
 Error from server (Forbidden): cronjobs.batch is forbidden: User "system:serviceaccount:default:default" cannot list cronjobs.batch in the namespace "default"
 
-# kubectl get services
+root@tools-no-rbac-7dc96f489b-ph7h9:/# kubectl get services
 NAME         TYPE           CLUSTER-IP     EXTERNAL-IP     PORT(S)                       AGE
 kubernetes   ClusterIP      172.21.0.1     <none>          443/TCP                       15d
 mqtt         LoadBalancer   172.21.91.88   169.60.93.179   1883:32145/TCP,80:31639/TCP   22h
@@ -213,7 +254,7 @@ The next thing we'd like to do is create a configmap entry to our mqtt
 public address. We can do that with:
 
 ```
-# kubectl create configmap mqtt-pub-address --from-literal=host=169.60.93.179
+root@tools-no-rbac-7dc96f489b-ph7h9:/# kubectl create configmap mqtt-pub-address --from-literal=host=169.60.93.179
 configmap "mqtt-pub-address" created
 ```
 
@@ -221,7 +262,7 @@ After it's created from within the pod we can't get it (because we
 didn't provide that level of access)
 
 ```
-# kubectl get configmap/mqtt-pub-address
+root@tools-no-rbac-7dc96f489b-ph7h9:/# kubectl get configmap/mqtt-pub-address
 Error from server (Forbidden): configmaps "mqtt-pub-address" is forbidden: User "system:serviceaccount:default:default" cannot get configmaps in the namespace "default"
 ```
 
@@ -243,11 +284,77 @@ metadata:
   uid: 2eee2331-85e2-11e8-857f-06cd14ab6bce
 ```
 
+We can also see that we gave this access to **every** pod in our
+environment. If we connect to our mqtt pod we can run the same
+command:
+
+```
+> kubectl get pod -l app=mqtt
+NAME                    READY     STATUS    RESTARTS   AGE
+mqtt-5ccf8b68b6-bkdf9   1/1       Running   0          2m
+
+> kubectl exec -it mqtt-5ccf8b68b6-bkdf9 bash
+
+root@mqtt-5ccf8b68b6-bkdf9:/# kubectl get services
+
+NAME         TYPE           CLUSTER-IP     EXTERNAL-IP     PORT(S)                       AGE
+kubernetes   ClusterIP      172.21.0.1     <none>          443/TCP                       15d
+mqtt         LoadBalancer   172.21.91.88   169.60.93.179   1883:32145/TCP,80:31639/TCP   23h
+```
+
+That is probably **way more** access than we wanted to grant. Let's
+see what we can do about granting more specific access to just the
+tools pod.
+
+Before we do that we'll need to remove the global-role-binding so that
+it doesn't get in the way of future examples.
+
+```
+> kubectl delete -f deploy/global-role.yaml
+
+role.rbac.authorization.k8s.io "global-role" deleted
+rolebinding.rbac.authorization.k8s.io "global-rolebinding" deleted
+```
+
+And we can see that our access has been revoked for the tools pod:
+
+```
+root@tools-no-rbac-7dc96f489b-ph7h9:/# kubectl get services
+
+Error from server (Forbidden): services is forbidden: User "system:serviceaccount:default:default" cannot list services in the namespace "default"
+```
+
+#### Recap: What did we learn thus far?
+
+Over this example we learned the following things:
+
+* By default, access to the Kubernetes API is restricted in a cluster
+* We can grant access using Role and RoleBinding resources
+* Roles have a set of Rules based on resource, verbs, and somtimes
+  resourceNames
+* Binding to the Subject of `kind: Group` and `name:
+  system:serviceaccounts` will give access to all pods in the system.
+
+### Creating a Service Account
+
+The best practice in security is to give out as few permissions as
+possible. One way to do that in Kubernetes is through
+`ServiceAccounts`. By default all applications run under a `default`
+ServiceAccount. But we can create additional ones specific to our
+application.
+
+The following yaml defines a basic ServiceAccount:
+
+```!yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: service-account-1
+  labels:
+    app: tools-rbac
+```
 
 
-
-kubectl exec -it tools-no-rbac-7dc96f489b-ph7h9 bash
-### 4. Create a RoleBinding
 
 ### 5. Rerun the application
 

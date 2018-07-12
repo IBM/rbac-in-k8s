@@ -345,7 +345,7 @@ application.
 
 The following yaml defines a basic ServiceAccount:
 
-```!yaml
+``` yaml
 apiVersion: v1
 kind: ServiceAccount
 metadata:

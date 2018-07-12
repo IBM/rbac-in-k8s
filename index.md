@@ -608,3 +608,75 @@ Over this example we learned the following things:
   ensure only specific pods have access to the API
 
 ### ClusterRoles and ClusterRoleBinding
+
+`Roles` and `RoleBindings` only apply to a single namespace. In all of
+our examples thus far that's all we wanted. What if we wanted to
+provide access across all namespaces? Or, what if we wanted to provide
+access to resources that don't live in a namespace, like `nodes` or
+even the non-resource `healthz` endpoint? For that we need
+`ClusterRoles` and `ClusterRoleBindings`.
+
+
+``` yaml
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: node-cluster-role
+rules:
+- apiGroups: [""]
+  resources: ["nodes"]
+  verbs: ["get", "list", "watch"]
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: service-account-clusterrolebinding
+  labels:
+    app: tools-rbac
+subjects:
+- kind: ServiceAccount
+  name: service-account-1
+  namespace: default
+roleRef:
+  kind: ClusterRole
+  name: node-cluster-role
+  apiGroup: ""
+```
+
+This looks very similar to the namespace specific version, but one
+major difference is that when referencing `subject` we need to specify
+which `namespace` the service account is in. ClusterRoleBindings don't
+live in a namespace, so have no default to work with.
+
+We can apply this with:
+
+```
+> kubectl apply -f deploy/service-account-cluster-role.yaml
+
+clusterrole.rbac.authorization.k8s.io "node-cluster-role" configured
+clusterrolebinding.rbac.authorization.k8s.io "service-account-clusterrolebinding" created
+```
+
+And after doing so the following commands work:
+
+```
+> kubectl exec tools-service-account-6664bdf7f-rv5n2 kubectl get nodes
+
+NAME             STATUS    ROLES     AGE       VERSION
+10.188.103.209   Ready     <none>    15d       v1.9.8-2+af27ab4b096122
+10.188.103.229   Ready     <none>    15d       v1.9.8-2+af27ab4b096122
+10.188.103.254   Ready     <none>    15d       v1.9.8-2+af27ab4b096122
+```
+
+But, as expected, they will fail from every other pod in the cluster,
+as we assigned it to a single ServiceAccount:
+
+```
+> kubectl exec  tools-no-rbac-7dc96f489b-ph7h9 kubectl get nodes
+
+Error from server (Forbidden): nodes is forbidden: User "system:serviceaccount:default:default" cannot list nodes at the cluster scope
+command terminated with exit code 1
+
+```
+
+## Learn More

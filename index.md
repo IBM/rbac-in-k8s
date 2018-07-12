@@ -318,7 +318,7 @@ rolebinding.rbac.authorization.k8s.io "global-rolebinding" deleted
 
 And we can see that our access has been revoked for the tools pod:
 
-```
+``` shell
 root@tools-no-rbac-7dc96f489b-ph7h9:/# kubectl get services
 
 Error from server (Forbidden): services is forbidden: User "system:serviceaccount:default:default" cannot list services in the namespace "default"
@@ -354,6 +354,47 @@ metadata:
     app: tools-rbac
 ```
 
+We can start a pod with a ServiceAccount by adding that to it's spec
+definition:
+
+``` yaml
+
+---
+# A service account is provisioned for security purposes.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: service-account-1
+  labels:
+    app: tools-rbac
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tools-service-account
+  labels:
+    app: tools
+    rbac: service-account-1
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tools
+      rbac: service-account-1
+  template:
+    metadata:
+      labels:
+        app: tools
+        rbac: service-account-1
+    spec:
+      serviceAccountName: service-account-1
+      containers:
+        - name: tools
+          image: "registry.ng.bluemix.net/rbac-tutorial/tools-img:1"
+          imagePullPolicy: Always
+          command: ["/bin/sleep", "3601"]
+
+```
 
 
 ### 5. Rerun the application

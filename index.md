@@ -318,7 +318,7 @@ rolebinding.rbac.authorization.k8s.io "global-rolebinding" deleted
 
 And we can see that our access has been revoked for the tools pod:
 
-``` shell session
+``` shell-session
 root@tools-no-rbac-7dc96f489b-ph7h9:/# kubectl get services
 
 Error from server (Forbidden): services is forbidden: User "system:serviceaccount:default:default" cannot list services in the namespace "default"

@@ -36,7 +36,7 @@ The total time to complete this how-to is around 90 minutes.
 
 ### 1. Create a Kubernetes Cluster
 
-Lets Bui
+TBD
 
 ### 2. Start our sample application, and our tools pod
 
@@ -80,6 +80,11 @@ OK
 
 ```
 
+And we're going to start up two deployments based on these images:
+
+```
+> kubectl apply -f deploy/mqtt.yaml -f deploy/tools.yaml
+```
 
 TBD
 
@@ -318,7 +323,7 @@ rolebinding.rbac.authorization.k8s.io "global-rolebinding" deleted
 
 And we can see that our access has been revoked for the tools pod:
 
-``` shell_session
+```
 root@tools-no-rbac-7dc96f489b-ph7h9:/# kubectl get services
 
 Error from server (Forbidden): services is forbidden: User "system:serviceaccount:default:default" cannot list services in the namespace "default"
@@ -358,16 +363,6 @@ We can start a pod with a ServiceAccount by adding that to it's spec
 definition:
 
 ``` yaml
-
----
-# A service account is provisioned for security purposes.
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: service-account-1
-  labels:
-    app: tools-rbac
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -396,6 +391,124 @@ spec:
 
 ```
 
+In the pod spec you can see `serviceAccountName:
+service-account-1`. The pod will be run as this service account, and
+all containers started from it will be running under that service
+account.
+
+### Start the Deployment with this ServiceAccount
+
+Run the following to start this pod with the service account in
+question:
+
+```
+> kubectl apply -f deploy/tools-service-account.yaml
+
+serviceaccount "service-account-1" configured
+deployment.apps "tools-service-account" configured
+```
+
+Great, now lets see how our pod is doing:
+
+```
+> kubectl get pods
+NAME                                     READY     STATUS         RESTARTS   AGE
+mqtt-5ccf8b68b6-bkdf9                    1/1       Running        0          51m
+tools-no-rbac-7dc96f489b-ph7h9           1/1       Running        22         22h
+tools-service-account-6664bdf7f-jzpcg    0/1       ErrImagePull   0          36s
+
+```
+
+Hmmm... that's no good, why didn't our pod start?
+
+```
+> kubectl describe pod/tools-service-account-6664bdf7f-jzpcg
+
+...
+Events:
+  Type     Reason                 Age               From                     Message
+  ----     ------                 ----              ----                     -------
+  Normal   Scheduled              2m                default-scheduler        Successfully assigned tools-service-account-6664bdf7f-jzpcg to 10.188.103.254
+  Normal   SuccessfulMountVolume  2m                kubelet, 10.188.103.254  MountVolume.SetUp succeeded for volume "service-account-1-token-kcbfz"
+  Normal   Pulling                1m (x4 over 2m)   kubelet, 10.188.103.254  pulling image "registry.ng.bluemix.net/rbac-tutorial/tools-img:1"
+  Warning  Failed                 1m (x4 over 2m)   kubelet, 10.188.103.254  Failed to pull image "registry.ng.bluemix.net/rbac-tutorial/tools-img:1": rpc error: code = Unknown desc = Error response from daemon: Get https://registry.ng.bluemix.net/v2/rbac-tutorial/tools-img/manifests/1: unauthorized: authentication required
+  Warning  Failed                 1m (x4 over 2m)   kubelet, 10.188.103.254  Error: ErrImagePull
+  Normal   BackOff                48s (x6 over 2m)  kubelet, 10.188.103.254  Back-off pulling image "registry.ng.bluemix.net/rbac-tutorial/tools-img:1"
+  Warning  Failed                 48s (x6 over 2m)  kubelet, 10.188.103.254  Error: ImagePullBackOff
+
+```
+
+It appears that our new service account doesn't have access to our
+image registry. If we do a get on both the `default` service account
+and `service-account-1` we can see a critical difference.
+
+```
+> kubectl get sa default -o yaml
+
+apiVersion: v1
+imagePullSecrets:
+- name: bluemix-default-secret
+- name: bluemix-default-secret-regional
+- name: bluemix-default-secret-international
+kind: ServiceAccount
+metadata:
+  creationTimestamp: 2018-06-26T20:33:40Z
+  name: default
+  namespace: default
+  resourceVersion: "241"
+  selfLink: /api/v1/namespaces/default/serviceaccounts/default
+  uid: 360775a5-7980-11e8-857f-06cd14ab6bce
+secrets:
+- name: default-token-x5gbt
+
+> kubectl get sa service-account-1 -o yaml
+
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"v1","kind":"ServiceAccount","metadata":{"annotations":{},"labels":{"app":"tools-rbac"},"name":"service-account-1","namespace":"default"}}
+  creationTimestamp: 2018-07-11T18:05:35Z
+  labels:
+    app: tools-rbac
+  name: service-account-1
+  namespace: default
+  resourceVersion: "420289"
+  selfLink: /api/v1/namespaces/default/serviceaccounts/service-account-1
+  uid: 02a91878-8535-11e8-857f-06cd14ab6bce
+secrets:
+- name: service-account-1-token-kcbfz
+
+```
+
+The `default` service account has this additional set of attributes
+under `imagePullSecrets`. These are what enable the service accounts
+access to the image registry. If we update our service account
+definition to include these our image should come up.
+
+```
+> kubectl apply -f deploy/fix-service-account-1.yaml
+
+serviceaccount "service-account-1" configured
+
+> kubectl delete pod/tools-service-account-6664bdf7f-jzpcg
+
+pod "tools-service-account-6664bdf7f-jzpcg" deleted
+```
+
+We delete the old pod that was in a failed state because in that kind
+of error condition kubernetes will not automatically retry launching
+it. After a delete of the pod, the deployment will try to start the
+pod again, and this time it will succeed.
+
+```
+> kubectl get pods
+NAME                                    READY     STATUS    RESTARTS   AGE
+mqtt-5ccf8b68b6-bkdf9                   1/1       Running   0          1h
+tools-no-rbac-7dc96f489b-ph7h9          1/1       Running   22         22h
+tools-service-account-6664bdf7f-rv5n2   1/1       Running   0          1m
+```
 
 ### 5. Rerun the application
 

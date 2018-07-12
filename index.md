@@ -125,8 +125,12 @@ rules:
   resources: ["services"]
   verbs: ["get", "list"]
 - apiGroups: [""]
-  resources: ["secrets"]
-  verbs: ["create", "delete"]
+  resources: ["configmaps"]
+  verbs: ["create"]
+- apiGroups: [""]
+  resources: ["configmaps"]
+  resourceNames: ["mqtt-pub-address"]
+  verbs: ["update", "delete"]
 ```
 
 Roles are specified as a set of rules, based on the apiGroup (empty
@@ -159,6 +163,90 @@ roleRef:
   apiGroup: ""
 ```
 
+A RoleBinding links a Role to Subjects. There are lots of different
+ways to handle Subjects. In this case we'll give this role to all
+service accounts in the default namespace. This effectively means that
+all pods will have access to these APIs.
+
+This can be applied with the yaml file in the repository:
+
+```
+> kubectl apply -f deploy/global-role.yaml
+role.rbac.authorization.k8s.io "global-role" created
+rolebinding.rbac.authorization.k8s.io "global-rolebinding" created
+```
+
+### Testing our new Access
+
+Let's connect to our tools pod and see what happens now:
+
+```
+> kubectl exec -it tools-no-rbac-7dc96f489b-ph7h9 bash
+
+# kubectl get all
+NAME         TYPE           CLUSTER-IP     EXTERNAL-IP     PORT(S)                       AGE
+kubernetes   ClusterIP      172.21.0.1     <none>          443/TCP                       15d
+mqtt         LoadBalancer   172.21.91.88   169.60.93.179   1883:32145/TCP,80:31639/TCP   22h
+Error from server (Forbidden): pods is forbidden: User "system:serviceaccount:default:default" cannot list pods in the namespace "default"
+Error from server (Forbidden): replicationcontrollers is forbidden: User "system:serviceaccount:default:default" cannot list replicationcontrollers in the namespace "default"
+Error from server (Forbidden): daemonsets.extensions is forbidden: User "system:serviceaccount:default:default" cannot list daemonsets.extensions in the namespace "default"
+Error from server (Forbidden): deployments.extensions is forbidden: User "system:serviceaccount:default:default" cannot list deployments.extensions in the namespace "default"
+Error from server (Forbidden): replicasets.extensions is forbidden: User "system:serviceaccount:default:default" cannot list replicasets.extensions in the namespace "default"
+Error from server (Forbidden): daemonsets.apps is forbidden: User "system:serviceaccount:default:default" cannot list daemonsets.apps in the namespace "default"
+Error from server (Forbidden): deployments.apps is forbidden: User "system:serviceaccount:default:default" cannot list deployments.apps in the namespace "default"
+Error from server (Forbidden): replicasets.apps is forbidden: User "system:serviceaccount:default:default" cannot list replicasets.apps in the namespace "default"
+Error from server (Forbidden): statefulsets.apps is forbidden: User "system:serviceaccount:default:default" cannot list statefulsets.apps in the namespace "default"
+Error from server (Forbidden): horizontalpodautoscalers.autoscaling is forbidden: User "system:serviceaccount:default:default" cannot list horizontalpodautoscalers.autoscaling in the namespace "default"
+Error from server (Forbidden): jobs.batch is forbidden: User "system:serviceaccount:default:default" cannot list jobs.batch in the namespace "default"
+Error from server (Forbidden): cronjobs.batch is forbidden: User "system:serviceaccount:default:default" cannot list cronjobs.batch in the namespace "default"
+
+# kubectl get services
+NAME         TYPE           CLUSTER-IP     EXTERNAL-IP     PORT(S)                       AGE
+kubernetes   ClusterIP      172.21.0.1     <none>          443/TCP                       15d
+mqtt         LoadBalancer   172.21.91.88   169.60.93.179   1883:32145/TCP,80:31639/TCP   22h
+
+```
+
+We can see that we now have access to services in the cluster.
+
+The next thing we'd like to do is create a configmap entry to our mqtt
+public address. We can do that with:
+
+```
+# kubectl create configmap mqtt-pub-address --from-literal=host=169.60.93.179
+configmap "mqtt-pub-address" created
+```
+
+After it's created from within the pod we can't get it (because we
+didn't provide that level of access)
+
+```
+# kubectl get configmap/mqtt-pub-address
+Error from server (Forbidden): configmaps "mqtt-pub-address" is forbidden: User "system:serviceaccount:default:default" cannot get configmaps in the namespace "default"
+```
+
+If we instead look at this from our computer, where we have all the
+permissions, we can see the contents of that configmap.
+
+```
+> kubectl get configmap/mqtt-pub-address -o yaml
+apiVersion: v1
+data:
+  host: 169.60.93.179
+kind: ConfigMap
+metadata:
+  creationTimestamp: 2018-07-12T14:45:13Z
+  name: mqtt-pub-address
+  namespace: default
+  resourceVersion: "418889"
+  selfLink: /api/v1/namespaces/default/configmaps/mqtt-pub-address
+  uid: 2eee2331-85e2-11e8-857f-06cd14ab6bce
+```
+
+
+
+
+kubectl exec -it tools-no-rbac-7dc96f489b-ph7h9 bash
 ### 4. Create a RoleBinding
 
 ### 5. Rerun the application

@@ -14,9 +14,12 @@ rules:
   resources: ["services"]
   verbs: ["get", "list"]
 - apiGroups: [""]
-  resources: ["secrets"]
+  resources: ["configmaps"]
+  verbs: ["create"]
+- apiGroups: [""]
+  resources: ["configmaps"]
   resourceNames: ["mqtt-pub-address"]
-  verbs: ["create", "delete"]
+  verbs: ["update", "delete"]
 ---
 # Standard role binding, connect these together.
 kind: RoleBinding

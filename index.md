@@ -680,3 +680,8 @@ command terminated with exit code 1
 ```
 
 ## Learn More
+
+*
+  [Kubernetes Upstream RBAC](https://kubernetes.io/docs/reference/access-authn-authz/rbac/) Docs -
+  these are the definitive source for how RBAC works, and has other
+  examples to show common usage.

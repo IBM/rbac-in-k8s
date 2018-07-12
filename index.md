@@ -512,6 +512,99 @@ tools-service-account-6664bdf7f-rv5n2   1/1       Running   0          1m
 
 ### Adding Role and RoleBinding for Service Account
 
+We now are running the `tools-service-account` pod as
+`service-account-1`. The following configuration will create a `Role`
+and `RoleBinding` for it.
+
+```yaml
+---
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: service-account-role
+  namespace: default
+  labels:
+    app: tools-rbac
+rules:
+- apiGroups: [""]
+  resources: ["services"]
+  verbs: ["get", "list"]
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["create"]
+- apiGroups: [""]
+  resources: ["configmaps"]
+  resourceNames: ["mqtt-pub-address"]
+  verbs: ["update", "delete"]
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: service-account-rolebinding
+  namespace: default
+  labels:
+    app: tools-rbac
+subjects:
+- kind: ServiceAccount
+  name: service-account-1
+roleRef:
+  kind: Role
+  name: service-account-role
+  apiGroup: ""
+```
+
+The difference from our global assignment is that our subject is now
+of `kind: ServiceAccount` instead of `kind: Group`. This exposes this
+to only to the single service account.
+
+We can apply these changes with:
+
+```
+> kubectl apply -f deploy/service-account-role.yaml
+
+role.rbac.authorization.k8s.io "service-account-role" configured
+rolebinding.rbac.authorization.k8s.io "service-account-rolebinding" configured
+```
+
 ### Testing Access
+
+Let's see the impact of these changes in our pods. We'll just exec the
+commands directly in all running pods.
+
+```
+> kubectl get pods
+NAME                                    READY     STATUS    RESTARTS   AGE
+mqtt-5ccf8b68b6-bkdf9                   1/1       Running   0          5h
+tools-no-rbac-7dc96f489b-ph7h9          1/1       Running   26         1d
+tools-service-account-6664bdf7f-rv5n2   1/1       Running   3          3h
+
+> kubectl exec mqtt-5ccf8b68b6-bkdf9 kubectl get services
+Error from server (Forbidden): services is forbidden: User "system:serviceaccount:default:default" cannot list services in the namespace "default"
+command terminated with exit code 1
+
+> kubectl exec tools-no-rbac-7dc96f489b-ph7h9 kubectl get services
+Error from server (Forbidden): services is forbidden: User "system:serviceaccount:default:default" cannot list services in the namespace "default"
+command terminated with exit code 1
+
+> kubectl exec tools-service-account-6664bdf7f-rv5n2 kubectl get services
+NAME         TYPE           CLUSTER-IP     EXTERNAL-IP     PORT(S)                       AGE
+kubernetes   ClusterIP      172.21.0.1     <none>          443/TCP                       15d
+mqtt         LoadBalancer   172.21.91.88   169.60.93.179   1883:32145/TCP,80:31639/TCP   1d
+```
+
+This is much better. As expected the only pod that has access to make
+these API calls is the one that is running as `service-account-1`. The
+others haven't been granted any access.
+
+#### Recap: What did we learn thus far?
+
+Over this example we learned the following things:
+
+* We can create additional ServiceAccounts besides the default to
+  isolate pods.
+* ServiceAccounts may need explicit permissions to access private
+  image registries.
+* We can assign Roles to specific ServiceAccounts with RoleBindings to
+  ensure only specific pods have access to the API
 
 ### ClusterRoles and ClusterRoleBinding

@@ -83,9 +83,45 @@ And we're going to start up two deployments based on these images:
 
 ```
 > kubectl apply -f deploy/mqtt.yaml -f deploy/tools.yaml
+
+secret "mqtt-secret" created
+persistentvolumeclaim "mqtt-nfs" created
+deployment.apps "mqtt" created
+service "mqtt" created
+deployment.apps "tools-no-rbac" created
+
 ```
 
-TBD
+This is going to take a 2 to 3 minutes to provision. `kubectl get all`
+will display the current status. When both pods are in `Running` state
+you can proceed to the next steps.
+
+```
+> kubectl get all
+NAME                                 READY     STATUS    RESTARTS   AGE
+pod/mqtt-5ccf8b68b6-m8hfl            1/1       Running   0          2m
+pod/tools-no-rbac-7dc96f489b-d9gcl   1/1       Running   0          2m
+
+NAME                 TYPE           CLUSTER-IP       EXTERNAL-IP     PORT(S)                       AGE
+service/kubernetes   ClusterIP      172.21.0.1       <none>          443/TCP                       16d
+service/mqtt         LoadBalancer   172.21.173.243   169.60.93.179   1883:31532/TCP,80:31517/TCP   2m
+
+NAME                                  DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
+deployment.extensions/mqtt            1         1         1            1           2m
+deployment.extensions/tools-no-rbac   1         1         1            1           2m
+
+NAME                                             DESIRED   CURRENT   READY     AGE
+replicaset.extensions/mqtt-5ccf8b68b6            1         1         1         2m
+replicaset.extensions/tools-no-rbac-7dc96f489b   1         1         1         2m
+
+NAME                            DESIRED   CURRENT   UP-TO-DATE   AVAILABLE   AGE
+deployment.apps/mqtt            1         1         1            1           2m
+deployment.apps/tools-no-rbac   1         1         1            1           2m
+
+NAME                                       DESIRED   CURRENT   READY     AGE
+replicaset.apps/mqtt-5ccf8b68b6            1         1         1         2m
+replicaset.apps/tools-no-rbac-7dc96f489b   1         1         1         2m
+```
 
 ### 3. Attempt to access the Kubernetes API
 

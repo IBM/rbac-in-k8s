@@ -31,7 +31,6 @@ In order to complete this how-to, you will need the following prerequisites:
 
 The total time to complete this how-to is around 90 minutes.
 
-
 ## Steps
 
 ### 1. Create a Kubernetes Cluster
@@ -152,7 +151,7 @@ Kubernetes has two resources that control the access to the API:
 
 We'll create both in a few ways to see how this all works.
 
-### 3. Create a Role and RoleBinding
+### 4. Create a Role and RoleBinding
 
 Our first step is to create a `Role`. The example Role we'll create
 can do 2 things, list or get all services, and create or delete
@@ -222,7 +221,7 @@ role.rbac.authorization.k8s.io "global-role" created
 rolebinding.rbac.authorization.k8s.io "global-rolebinding" created
 ```
 
-### Testing our new Access
+### 5. Testing our new Access
 
 Let's connect to our tools pod and see what happens now:
 
@@ -329,7 +328,7 @@ root@tools-no-rbac-7dc96f489b-ph7h9:/# kubectl get services
 Error from server (Forbidden): services is forbidden: User "system:serviceaccount:default:default" cannot list services in the namespace "default"
 ```
 
-#### Recap: What did we learn thus far?
+### Recap: What did we learn thus far?
 
 Over this example we learned the following things:
 
@@ -340,7 +339,7 @@ Over this example we learned the following things:
 * Binding to the Subject of `kind: Group` and `name:
   system:serviceaccounts` will give access to all pods in the system.
 
-### Creating a Service Account
+### 6. Creating a Service Account
 
 The best practice in security is to give out as few permissions as
 possible. One way to do that in Kubernetes is through
@@ -396,7 +395,7 @@ service-account-1`. The pod will be run as this service account, and
 all containers started from it will be running under that service
 account.
 
-### Start the Deployment with this ServiceAccount
+### 7. Start the Deployment with this ServiceAccount
 
 Run the following to start this pod with the service account in
 question:
@@ -510,7 +509,7 @@ tools-no-rbac-7dc96f489b-ph7h9          1/1       Running   22         22h
 tools-service-account-6664bdf7f-rv5n2   1/1       Running   0          1m
 ```
 
-### Adding Role and RoleBinding for Service Account
+### 8. Adding Role and RoleBinding for Service Account
 
 We now are running the `tools-service-account` pod as
 `service-account-1`. The following configuration will create a `Role`
@@ -566,7 +565,7 @@ role.rbac.authorization.k8s.io "service-account-role" configured
 rolebinding.rbac.authorization.k8s.io "service-account-rolebinding" configured
 ```
 
-### Testing Access
+### 9. Testing Access
 
 Let's see the impact of these changes in our pods. We'll just exec the
 commands directly in all running pods.
@@ -596,7 +595,7 @@ This is much better. As expected the only pod that has access to make
 these API calls is the one that is running as `service-account-1`. The
 others haven't been granted any access.
 
-#### Recap: What did we learn thus far?
+### Recap: What did we learn thus far?
 
 Over this example we learned the following things:
 
@@ -607,7 +606,7 @@ Over this example we learned the following things:
 * We can assign Roles to specific ServiceAccounts with RoleBindings to
   ensure only specific pods have access to the API
 
-### ClusterRoles and ClusterRoleBinding
+### 10. ClusterRoles and ClusterRoleBinding
 
 `Roles` and `RoleBindings` only apply to a single namespace. In all of
 our examples thus far that's all we wanted. What if we wanted to
@@ -679,9 +678,102 @@ command terminated with exit code 1
 
 ```
 
+## A Real World Example - ny-power
+
+Why might we want to access the internals like this? Here is the
+example that the tutorial was based on.
+
+The [ny-power](http://ny-power.org) application is an MQTT message
+streaming service that provides real time data from the New York State
+power grid. There is same web console that attaches directly to this
+MQTT public port. To do this, we need to pass the public ip address
+from the Load Balancer to the pod that starts the web site.
+
+It's also not a great idea to have things like `kubectl` living in all
+your images, so we created an init container that boots up, examines
+the services, extracts the public ip, and sets that in a secret. Once
+done the web container boots and pulls that public ip out of it's
+environment. That allows the web container to be a much thinner
+container with less access to tools.
+
+A service account is used so that only this pod has any access to the
+API. Below is the example configuration from the application. You can
+also learn more about the whole application at
+it's
+[IBM Pattern Page](https://developer.ibm.com/code/patterns/use-mqtt-stream-real-time-data/)
+
+``` yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: ny-power-web
+    chart: ny-power-0.2.0
+    heritage: Tiller
+    release: prod
+  name: prod-ny-power-web
+  namespace: default
+spec:
+  selector:
+    matchLabels:
+      app: ny-power-web
+      release: prod
+  template:
+    spec:
+      serviceAccountName: prod-ny-power-readersa
+      initContainers:
+      - command:
+        - /root/setvalue.sh
+        env:
+        - name: MQTT_CONTAINER_NAME
+          value: prod-ny-power-mqtt
+        - name: MQTT_SECRET_NAME
+          value: prod-ny-power-mqtt
+        image: registry.ng.bluemix.net/ny-power/ny-power-ibm-cloud:9
+        imagePullPolicy: Always
+        name: prod-ny-power-web-init
+        resources: {}
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+      containers:
+      - env:
+        - name: INFLUXDB_HOST
+          value: prod-ny-power-influx
+        - name: MQTT_HOST
+          valueFrom:
+            secretKeyRef:
+              key: host
+              name: prod-ny-power-mqtt
+        - name: MQTT_PUMP_PASS
+          valueFrom:
+            secretKeyRef:
+              key: password
+              name: prod-ny-power-mqtt-pump
+        image: registry.ng.bluemix.net/ny-power/ny-power-web:17
+        imagePullPolicy: Always
+        name: prod-ny-power-web
+        ports:
+        - containerPort: 80
+          protocol: TCP
+        resources: {}
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+      restartPolicy: Always
+
+```
+
 ## Learn More
 
+RBAC is a complicated subject, and keeping the model of it in your
+head is sometimes challenging. Hopefully this tutorial and the ability
+to interactively poke at an example application helps clarify things.
+
+If you are interested in learning more, check out the resources below.
+
 *
-  [Kubernetes Upstream RBAC](https://kubernetes.io/docs/reference/access-authn-authz/rbac/) Docs -
+  [Read the Kubernetes RBAC Docs](https://kubernetes.io/docs/reference/access-authn-authz/rbac/) -
   these are the definitive source for how RBAC works, and has other
   examples to show common usage.
+
+* [Examine the code](https://github.com/IBM/ny-power/) of the ny-power
+  pattern to see this action.

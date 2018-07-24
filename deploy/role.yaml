@@ -1,7 +1,7 @@
 kind: Role
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
-  name: global-role
+  name: api-role
   namespace: default
   labels:
     app: tools-rbac
@@ -20,21 +20,3 @@ rules:
   resources: ["configmaps"]
   resourceNames: ["mqtt-pub-address"]
   verbs: ["update", "delete"]
----
-# Standard role binding, connect these together.
-kind: RoleBinding
-apiVersion: rbac.authorization.k8s.io/v1
-metadata:
-  name: global-rolebinding
-  namespace: default
-  labels:
-    app: tools-rbac
-subjects:
-- kind: Group
-  name: system:serviceaccounts
-  apiGroup: rbac.authorization.k8s.io
-  namespace: default
-roleRef:
-  kind: Role
-  name: global-role
-  apiGroup: ""

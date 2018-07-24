@@ -63,7 +63,7 @@ OK
 Then we'll build these example images:
 
 ```
-> bx cr build --tag registry.ng.bluemix.net/rbac-tutorial/mqtt-img:1 deploy/mqtt-img
+> ibmcloud cr build --tag registry.ng.bluemix.net/rbac-tutorial/mqtt-img:1 deploy/mqtt-img
 
 Sending build context to Docker daemon  6.656kB
 Step 1/13 : FROM ubuntu:xenial
@@ -75,7 +75,7 @@ OK
 ```
 
 ```
-> bx cr build --tag registry.ng.bluemix.net/rbac-tutorial/tools-img:1 deploy/tools-img
+> ibmcloud cr build --tag registry.ng.bluemix.net/rbac-tutorial/tools-img:1 deploy/tools-img
 
 Sending build context to Docker daemon  4.096kB
 Step 1/9 : FROM ubuntu:xenial
@@ -259,7 +259,7 @@ all pods will have access to these APIs.
 This can be applied with the yaml file in the repository:
 
 ```
-> kubectl apply -f deploy/role.yaml -f global-role-assign.yaml
+> kubectl apply -f deploy/role.yaml -f deploy/global-role-assign.yaml
 role.rbac.authorization.k8s.io "api-role" created
 rolebinding.rbac.authorization.k8s.io "global-rolebinding" created
 ```

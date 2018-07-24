@@ -26,6 +26,9 @@ In order to complete this how-to, you will need the following prerequisites:
 * A
   provisioned
   [Kubernetes](https://console.bluemix.net/containers-kubernetes/clusters)
+* Install
+  the
+  [IBM Cloud Developer Tools](https://console.bluemix.net/docs/cli/idt/setting_up_idt.html#add-cli)
 
 ## Estimated Time
 
@@ -35,13 +38,17 @@ The total time to complete this how-to is around 90 minutes.
 
 ### 1. Create a Kubernetes Cluster
 
-TBD
+TBD: Link to existing tools?
 
 ### 2. Start our sample application, and our tools pod
 
 Let's build some images for our application and get them up and
-running. First off we need to create a local container registry to
-store them in:
+running. These are modified versions of the images used in the
+[ny-power](http://ny-power.org/) application. They include the
+`kubectl` tool to make it easy to access the Kuberenetes API.
+
+First off we need to create a container registry namespace to store
+our images:
 
 ```
 > ibmcloud cr namespace-add rbac-tutorial
@@ -53,7 +60,7 @@ Successfully added namespace 'rbac-tutorial'
 OK
 ```
 
-Then we'll build a couple of images:
+Then we'll build these example images:
 
 ```
 > bx cr build --tag registry.ng.bluemix.net/rbac-tutorial/mqtt-img:1 deploy/mqtt-img
@@ -189,7 +196,7 @@ We'll create both in a few ways to see how this all works.
 
 ### 4. Create a Role and RoleBinding
 
-Our first step is to create a `Role`. The example Role we'll create
+Our first step is to create a `Role`. The example `Role` we'll create
 can do 2 things, list or get all services, and create or delete
 secrets.
 
@@ -197,7 +204,7 @@ secrets.
 kind: Role
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
-  name: global-role
+  name: api-role
   namespace: default
   labels:
     app: tools-rbac
@@ -240,7 +247,7 @@ subjects:
   namespace: default
 roleRef:
   kind: Role
-  name: global-role
+  name: api-role
   apiGroup: ""
 ```
 
@@ -252,8 +259,8 @@ all pods will have access to these APIs.
 This can be applied with the yaml file in the repository:
 
 ```
-> kubectl apply -f deploy/global-role.yaml
-role.rbac.authorization.k8s.io "global-role" created
+> kubectl apply -f deploy/role.yaml -f global-role-assign.yaml
+role.rbac.authorization.k8s.io "api-role" created
 rolebinding.rbac.authorization.k8s.io "global-rolebinding" created
 ```
 
@@ -290,7 +297,7 @@ mqtt         LoadBalancer   172.21.91.88   169.60.93.179   1883:32145/TCP,80:316
 
 We can see that we now have access to services in the cluster.
 
-The next thing we'd like to do is create a configmap entry to our mqtt
+The next thing we'd like to do is create a `configmap` entry to our mqtt
 public address. We can do that with:
 
 ```
@@ -307,7 +314,7 @@ Error from server (Forbidden): configmaps "mqtt-pub-address" is forbidden: User 
 ```
 
 If we instead look at this from our computer, where we have all the
-permissions, we can see the contents of that configmap.
+permissions, we can see the contents of that `configmap`.
 
 ```
 > kubectl get configmap/mqtt-pub-address -o yaml
@@ -350,9 +357,8 @@ Before we do that we'll need to remove the global-role-binding so that
 it doesn't get in the way of future examples.
 
 ```
-> kubectl delete -f deploy/global-role.yaml
+> kubectl delete -f deploy/global-role-assign.yaml
 
-role.rbac.authorization.k8s.io "global-role" deleted
 rolebinding.rbac.authorization.k8s.io "global-rolebinding" deleted
 ```
 
@@ -548,30 +554,10 @@ tools-service-account-6664bdf7f-rv5n2   1/1       Running   0          1m
 ### 8. Adding Role and RoleBinding for Service Account
 
 We now are running the `tools-service-account` pod as
-`service-account-1`. The following configuration will create a `Role`
-and `RoleBinding` for it.
+`service-account-1`. The following configuration will bind our
+previous `Role` to just this service account.
 
 ```yaml
----
-kind: Role
-apiVersion: rbac.authorization.k8s.io/v1
-metadata:
-  name: service-account-role
-  namespace: default
-  labels:
-    app: tools-rbac
-rules:
-- apiGroups: [""]
-  resources: ["services"]
-  verbs: ["get", "list"]
-- apiGroups: [""]
-  resources: ["configmaps"]
-  verbs: ["create"]
-- apiGroups: [""]
-  resources: ["configmaps"]
-  resourceNames: ["mqtt-pub-address"]
-  verbs: ["update", "delete"]
----
 kind: RoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
@@ -584,7 +570,7 @@ subjects:
   name: service-account-1
 roleRef:
   kind: Role
-  name: service-account-role
+  name: api-role
   apiGroup: ""
 ```
 
@@ -595,9 +581,8 @@ to only to the single service account.
 We can apply these changes with:
 
 ```
-> kubectl apply -f deploy/service-account-role.yaml
+> kubectl apply -f deploy/service-account-role-assign.yaml
 
-role.rbac.authorization.k8s.io "service-account-role" configured
 rolebinding.rbac.authorization.k8s.io "service-account-rolebinding" configured
 ```
 

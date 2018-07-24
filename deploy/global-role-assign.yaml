@@ -1,0 +1,17 @@
+# Standard role binding, connect these together.
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: global-rolebinding
+  namespace: default
+  labels:
+    app: tools-rbac
+subjects:
+- kind: Group
+  name: system:serviceaccounts
+  apiGroup: rbac.authorization.k8s.io
+  namespace: default
+roleRef:
+  kind: Role
+  name: api-role
+  apiGroup: ""
